@@ -43,8 +43,20 @@ def generate_launch_description():
                        output='screen'),
         ExecuteProcess(cmd=[emulator_path, 'em2', str(em2_port), str(dr2_data_port), str(dr2_video_port)],
                        output='screen'),
-        Node(package='tello_driver', executable='tello_driver_main', node_name='dr1', namespace='dr1',
-             parameters=dr1_params, output='screen'),
-        Node(package='tello_driver', executable='tello_driver_main', node_name='dr2', namespace='dr2',
-             parameters=dr2_params, output='screen'),
+        Node(
+            package='tello_driver', 
+            executable='tello_driver_main', 
+            name='dr1', 
+            namespace='dr1',
+            parameters=dr1_params, 
+            output='screen'
+        ),
+        Node(
+            package='tello_driver', 
+            executable='tello_driver_main', 
+            name='dr2', 
+            namespace='dr2',
+            parameters=dr2_params, 
+            output='screen'
+        ),
     ])

@@ -12,6 +12,11 @@ def generate_launch_description():
 
     return LaunchDescription([
         ExecuteProcess(cmd=[emulator_path], output='screen'),
-        Node(package='tello_driver', executable='tello_driver_main', node_name='tello_driver',
-             parameters=tello_driver_params, output='screen'),
+        Node(
+            package='tello_driver', 
+            executable='tello_driver_main', 
+            name='tello_driver',
+            parameters=tello_driver_params, 
+            output='screen'
+        ),
     ])
