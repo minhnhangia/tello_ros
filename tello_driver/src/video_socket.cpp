@@ -1,6 +1,9 @@
 #include "tello_driver_node.hpp"
 
+extern "C" {
 #include <libavutil/frame.h>
+#include <libavutil/log.h>
+}
 #include <opencv2/highgui.hpp>
 
 #include "camera_calibration_parsers/parse.hpp"
@@ -20,6 +23,9 @@ namespace tello_driver
   VideoSocket::VideoSocket(TelloDriverNode *driver, unsigned short video_port, const std::string &camera_info_path) :
     TelloSocket(driver, video_port)
   {
+    // Suppress FFmpeg log messages
+    av_log_set_level(AV_LOG_QUIET);
+
     std::string camera_name;
     if (camera_calibration_parsers::readCalibration(camera_info_path, camera_name, camera_info_msg_)) {
       RCLCPP_INFO(driver_->get_logger(), "Parsed camera info for '%s'", camera_name.c_str());
@@ -90,9 +96,9 @@ namespace tello_driver
           // Convert to cv::Mat
           cv::Mat mat{frame.height, frame.width, CV_8UC3, bgr24};
 
-          // Display
-          cv::imshow("frame", mat);
-          cv::waitKey(1);
+          // Display (comment out to avoid Qt threading issues)
+          // cv::imshow("frame", mat);
+          // cv::waitKey(1);
 
           // Synchronize ROS messages
           auto stamp = driver_->now();
