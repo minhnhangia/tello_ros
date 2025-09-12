@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.14.4)
 project(tello_gazebo)
 
 #=============
@@ -10,16 +10,9 @@ if (NOT CMAKE_C_STANDARD)
   set(CMAKE_C_STANDARD 99)
 endif ()
 
-# Default to C++14
+# Default to C++17
 if (NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 14)
-endif ()
-
-# Emulate colcon
-if ($ENV{CLION_IDE})
-  message("Running inside CLion")
-  set(tello_msgs_DIR "${PROJECT_SOURCE_DIR}/../../../install/tello_msgs/share/tello_msgs/cmake")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DRUN_INSIDE_CLION")
+  set(CMAKE_CXX_STANDARD 17)
 endif ()
 
 # Find packages
