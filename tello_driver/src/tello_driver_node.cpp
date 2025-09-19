@@ -186,21 +186,10 @@ namespace tello_driver
     odom_msg.header.frame_id = odom_frame_id_;
     odom_msg.child_frame_id = base_frame_id_;
 
-    // Position (convert from cm to meters)
-    if (flight_data.sdk == tello_msgs::msg::FlightData::SDK_2_0) 
-    {
-      // SDK 2.0 provides x, y, z coordinates
-      odom_msg.pose.pose.position.x = flight_data.x / 100.0;  // cm to m
-      odom_msg.pose.pose.position.y = flight_data.y / 100.0;  // cm to m
-      odom_msg.pose.pose.position.z = flight_data.z / 100.0;  // cm to m
-    } 
-    else 
-    {
-      // SDK 1.3 only has height, set x,y to 0
-      odom_msg.pose.pose.position.x = 0.0;
-      odom_msg.pose.pose.position.y = 0.0;
-      odom_msg.pose.pose.position.z = flight_data.h / 100.0;  // cm to m
-    }
+    // Position data not available (set to 0)
+    odom_msg.pose.pose.position.x = 0.0;
+    odom_msg.pose.pose.position.y = 0.0;
+    odom_msg.pose.pose.position.z = 0.0;
 
     // Orientation (convert from degrees to quaternion)
     tf2::Quaternion q;
