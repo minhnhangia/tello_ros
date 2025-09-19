@@ -27,10 +27,13 @@ find_package(OpenCV REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_components REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
 find_package(ros2_shared REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(tello_msgs REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
 
 # Package includes not needed for CMake >= 2.8.11
 include_directories(
@@ -60,13 +63,16 @@ set(DRIVER_NODE_DEPS
   class_loader
   cv_bridge
   geometry_msgs
+  nav_msgs
   OpenCV
   rclcpp
   rclcpp_components
   ros2_shared
   sensor_msgs
   std_msgs
-  tello_msgs)
+  tello_msgs
+  tf2
+  tf2_geometry_msgs)
 
 set(DRIVER_NODE_LIBS
   avcodec

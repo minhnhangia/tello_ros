@@ -22,10 +22,13 @@
     <depend>cv_bridge</depend>
     <depend>rclcpp</depend>
     <depend>geometry_msgs</depend>
+    <depend>nav_msgs</depend>
     <depend>ros2_shared</depend>
     <depend>sensor_msgs</depend>
     <depend>std_msgs</depend>
     <depend>tello_msgs</depend>
+    <depend>tf2</depend>
+    <depend>tf2_geometry_msgs</depend>
     <depend>rclcpp_components</depend>
 
     <export>

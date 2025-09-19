@@ -28,7 +28,10 @@ namespace tello_driver
 
     receive_time_ = driver_->now();
 
-    if (receiving_ && driver_->count_subscribers(driver_->flight_data_pub_->get_topic_name()) == 0) {
+    if (receiving_ && 
+        driver_->count_subscribers(driver_->flight_data_pub_->get_topic_name()) == 0 && 
+        driver_->count_subscribers(driver_->odom_pub_->get_topic_name()) == 0)
+    {
       // Nothing to do
       return;
     }
@@ -56,45 +59,56 @@ namespace tello_driver
     }
 
     // Only send ROS messages if there are subscribers
-    if (driver_->count_subscribers(driver_->flight_data_pub_->get_topic_name()) > 0) {
-      tello_msgs::msg::FlightData msg;
-      msg.header.stamp = receive_time_;
-      msg.raw = raw;
-      msg.sdk = sdk_;
+    if (driver_->count_subscribers(driver_->flight_data_pub_->get_topic_name()) == 0 && 
+        driver_->count_subscribers(driver_->odom_pub_->get_topic_name()) == 0)
+    {
+      return;
+    }
 
-      try {
+    tello_msgs::msg::FlightData msg;
+    msg.header.stamp = receive_time_;
+    msg.raw = raw;
+    msg.sdk = sdk_;
 
-        if (sdk_ == tello_msgs::msg::FlightData::SDK_2_0) {
-          msg.mid = std::stoi(fields["mid"]);
-          msg.x = std::stoi(fields["x"]);
-          msg.y = std::stoi(fields["y"]);
-          msg.z = std::stoi(fields["z"]);
-        }
-
-        msg.pitch = std::stoi(fields["pitch"]);
-        msg.roll = std::stoi(fields["roll"]);
-        msg.yaw = std::stoi(fields["yaw"]);
-        msg.vgx = std::stoi(fields["vgx"]);
-        msg.vgy = std::stoi(fields["vgy"]);
-        msg.vgz = std::stoi(fields["vgz"]);
-        msg.templ = std::stoi(fields["templ"]);
-        msg.temph = std::stoi(fields["temph"]);
-        msg.tof = std::stoi(fields["tof"]);
-        msg.h = std::stoi(fields["h"]);
-        msg.bat = std::stoi(fields["bat"]);
-        msg.baro = std::stof(fields["baro"]);
-        msg.time = std::stoi(fields["time"]);
-        msg.agx = std::stof(fields["agx"]);
-        msg.agy = std::stof(fields["agy"]);
-        msg.agz = std::stof(fields["agz"]);
-
-      } catch (std::exception e) {
-        RCLCPP_ERROR(driver_->get_logger(), "Can't parse flight data");
-        return;
+    try 
+    {
+      if (sdk_ == tello_msgs::msg::FlightData::SDK_2_0) 
+      {
+        msg.mid = std::stoi(fields["mid"]);
+        msg.x = std::stoi(fields["x"]);
+        msg.y = std::stoi(fields["y"]);
+        msg.z = std::stoi(fields["z"]);
       }
 
-      driver_->flight_data_pub_->publish(msg);
+      msg.pitch = std::stoi(fields["pitch"]);
+      msg.roll = std::stoi(fields["roll"]);
+      msg.yaw = std::stoi(fields["yaw"]);
+      msg.vgx = std::stoi(fields["vgx"]);
+      msg.vgy = std::stoi(fields["vgy"]);
+      msg.vgz = std::stoi(fields["vgz"]);
+      msg.templ = std::stoi(fields["templ"]);
+      msg.temph = std::stoi(fields["temph"]);
+      msg.tof = std::stoi(fields["tof"]);
+      msg.h = std::stoi(fields["h"]);
+      msg.bat = std::stoi(fields["bat"]);
+      msg.baro = std::stof(fields["baro"]);
+      msg.time = std::stoi(fields["time"]);
+      msg.agx = std::stof(fields["agx"]);
+      msg.agy = std::stof(fields["agy"]);
+      msg.agz = std::stof(fields["agz"]);
+    } 
+
+    catch (std::exception e) 
+    {
+      RCLCPP_ERROR(driver_->get_logger(), "Can't parse flight data");
+      return;
     }
+
+    driver_->flight_data_pub_->publish(msg);
+    
+    // Also publish odometry data
+    driver_->publish_odometry(msg);
+    
   }
 
 } // namespace tello_driver

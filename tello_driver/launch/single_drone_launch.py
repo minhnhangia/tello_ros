@@ -10,7 +10,7 @@ def generate_launch_description():
 
     dr1_params = [{
         'drone_ip': '192.168.10.1',
-        'command_port': 38065,  # send commands to Tello from this (local) UDP port
+        'command_port': 8889,  # send commands to Tello from this (local) UDP port
         'drone_port': 8889,     # send commands to this (Tello) UDP port
         'data_port': 8890,      # receive Tello state on this UDP port
         'video_port': 11111     # receive Tello video stream on this UDP port
