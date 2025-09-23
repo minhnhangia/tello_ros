@@ -35,8 +35,12 @@ namespace tello_driver
     Node("tello_driver", options)
   {
     // ROS publishers
-    image_pub_ = create_publisher<sensor_msgs::msg::Image>("image_raw", rclcpp::SensorDataQoS());
-    camera_info_pub_ = create_publisher<sensor_msgs::msg::CameraInfo>("camera_info", rclcpp::SensorDataQoS());
+    rclcpp::QoS qos_profile(rclcpp::KeepLast(1));
+    qos_profile.reliability(RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT);
+    qos_profile.durability(RMW_QOS_POLICY_DURABILITY_VOLATILE);
+
+    image_pub_ = create_publisher<sensor_msgs::msg::Image>("image_raw", qos_profile);
+    camera_info_pub_ = create_publisher<sensor_msgs::msg::CameraInfo>("camera_info", qos_profile);
     flight_data_pub_ = create_publisher<tello_msgs::msg::FlightData>("flight_data", 1);
     tello_response_pub_ = create_publisher<tello_msgs::msg::TelloResponse>("tello_response", 1);
     odom_pub_ = create_publisher<nav_msgs::msg::Odometry>("odom", rclcpp::SensorDataQoS());
@@ -129,6 +133,7 @@ namespace tello_driver
     if (state_socket_->receiving() && !video_socket_->receiving() && !command_socket_->waiting()) {
       // Start video
       command_socket_->initiate_command("streamon", false);
+      command_socket_->initiate_command("setfps low", false);
       return;
     }
 
