@@ -39,15 +39,28 @@ namespace tello_driver
   {
     std::lock_guard<std::mutex> lock(mtx_);
 
-    if (!waiting_) {
-      RCLCPP_DEBUG(driver_->get_logger(), "Sending '%s'...", command.c_str());
+    if (waiting_) return;
+    
+    RCLCPP_DEBUG(driver_->get_logger(), "Sending '%s'...", command.c_str());
+
+    try
+    {
       socket_.send_to(asio::buffer(command), remote_endpoint_);
       send_time_ = driver_->now();
 
       // Wait for a response for all commands except "rc"
-      if (command.rfind("rc", 0) != 0) {
+      if (command.rfind("rc", 0) != 0) 
+      {
         respond_ = respond;
         waiting_ = true;
+      }
+    }
+    catch (std::exception& e)
+    {
+      RCLCPP_ERROR(driver_->get_logger(), "Failed to send command '%s': %s", command.c_str(), e.what());
+      if (respond) 
+      {
+        complete_command(tello_msgs::msg::TelloResponse::ERROR, std::string("error: ") + e.what());
       }
     }
   }
