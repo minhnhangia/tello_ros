@@ -131,9 +131,16 @@ namespace tello_driver
     }
 
     if (state_socket_->receiving() && !video_socket_->receiving() && !command_socket_->waiting()) {
-      // Start video
+      // Configure video settings before starting stream
+      static bool fps_configured = false;
+      if (!fps_configured) {
+        command_socket_->initiate_command("setfps high", false);
+        fps_configured = true;
+        return;
+      }
+      
+      // Start video after FPS is configured
       command_socket_->initiate_command("streamon", false);
-      command_socket_->initiate_command("setfps low", false);
       return;
     }
 
