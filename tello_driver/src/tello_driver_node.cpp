@@ -134,7 +134,7 @@ namespace tello_driver
       // Configure video settings before starting stream
       static bool fps_configured = false;
       if (!fps_configured) {
-        command_socket_->initiate_command("setfps high", false);
+        command_socket_->initiate_command("setfps middle", false);
         fps_configured = true;
         return;
       }
