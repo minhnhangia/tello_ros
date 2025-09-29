@@ -41,9 +41,9 @@ namespace tello_driver
 
     image_pub_ = create_publisher<sensor_msgs::msg::Image>("image_raw", qos_profile);
     camera_info_pub_ = create_publisher<sensor_msgs::msg::CameraInfo>("camera_info", qos_profile);
-    flight_data_pub_ = create_publisher<tello_msgs::msg::FlightData>("flight_data", 1);
-    tello_response_pub_ = create_publisher<tello_msgs::msg::TelloResponse>("tello_response", 1);
-    odom_pub_ = create_publisher<nav_msgs::msg::Odometry>("odom", rclcpp::SensorDataQoS());
+    flight_data_pub_ = create_publisher<tello_msgs::msg::FlightData>("flight_data", qos_profile);
+    tello_response_pub_ = create_publisher<tello_msgs::msg::TelloResponse>("tello_response", 10);
+    odom_pub_ = create_publisher<nav_msgs::msg::Odometry>("odom", qos_profile);
 
     // ROS service
     command_srv_ = create_service<tello_msgs::srv::TelloAction>(
