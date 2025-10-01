@@ -171,17 +171,24 @@ namespace tello_driver
 
     std::string str = std::string(buffer_.begin(), buffer_.begin() + r);
     
-    // Handle EXT TOF responses specially (can arrive when waiting_ is false)
-    if (waiting_ext_tof_ && str.size() >= 5 && str.substr(0, 4) == "tof ") {
+    // Handle TOF responses (regardless of waiting_ext_tof_ state to avoid "Unexpected" warnings)
+    if (str.size() >= 5 && str.substr(0, 4) == "tof ") 
+    {
       RCLCPP_DEBUG(driver_->get_logger(), "Received EXT TOF response: '%s'", str.c_str());
       handle_ext_tof_response(str);
-      waiting_ext_tof_ = false;
+      if (waiting_ext_tof_) 
+      {
+        waiting_ext_tof_ = false;
+      }
     }
-    else if (waiting_) {
+    else if (waiting_)
+    {
       RCLCPP_DEBUG(driver_->get_logger(), "Received '%s'", str.c_str());
       complete_command(str == "error" ? tello_msgs::msg::TelloResponse::ERROR : tello_msgs::msg::TelloResponse::OK,
                        str);
-    } else {
+    } 
+    else 
+    {
       RCLCPP_WARN(driver_->get_logger(), "Unexpected '%s'", str.c_str());
     }
   }

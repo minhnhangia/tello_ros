@@ -55,9 +55,9 @@ namespace tello_driver
     cmd_vel_sub_ = create_subscription<geometry_msgs::msg::Twist>(
       "cmd_vel", 1, std::bind(&TelloDriverNode::cmd_vel_callback, this, std::placeholders::_1));
 
-    // ROS timer
+    // ROS timer - Run at 5 Hz to support high-frequency EXT TOF queries and responsive timeout monitoring
     using namespace std::chrono_literals;
-    spin_timer_ = create_wall_timer(1s, std::bind(&TelloDriverNode::timer_callback, this));
+    spin_timer_ = create_wall_timer(200ms, std::bind(&TelloDriverNode::timer_callback, this));
 
     // Parameters - Allocate the parameter context as a local variable because it is not used outside this routine
     TelloDriverContext cxt{};
@@ -118,7 +118,7 @@ namespace tello_driver
     }
   }
 
-  // Do work every second
+  // Do work every 200ms (5 Hz)
   void TelloDriverNode::timer_callback()
   {
     //====
@@ -169,9 +169,9 @@ namespace tello_driver
       timeout = true;
     }
 
-    // Check for EXT TOF timeout (5 seconds timeout for non-critical queries)
+    // Check for EXT TOF timeout (1 second timeout for non-critical queries)
     if (command_socket_->waiting_ext_tof() && 
-        now() - command_socket_->ext_tof_send_time() > rclcpp::Duration(5, 0)) {
+        now() - command_socket_->ext_tof_send_time() > rclcpp::Duration(1, 0)) {
       RCLCPP_WARN(get_logger(), "EXT TOF query timed out");
       // Reset the EXT TOF waiting state (will be done in timeout method)
       command_socket_->timeout();
@@ -195,11 +195,10 @@ namespace tello_driver
     // EXT TOF Sensor Queries (forward-facing external sensor)
     //====
 
-    // Query EXT TOF sensor every 1 second if there are subscribers
     static rclcpp::Time last_ext_tof_query = rclcpp::Time(0L, RCL_ROS_TIME);
     if (state_socket_->receiving() && video_socket_->receiving() && !command_socket_->waiting() &&
-        ext_tof_pub_->get_subscription_count() > 0 &&
-        now() - last_ext_tof_query > rclcpp::Duration(1, 0)) {
+        ext_tof_pub_->get_subscription_count() > 0) 
+    {
       command_socket_->query_ext_tof();
       last_ext_tof_query = now();
       return;
