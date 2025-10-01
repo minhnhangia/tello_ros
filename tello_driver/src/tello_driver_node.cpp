@@ -169,6 +169,14 @@ namespace tello_driver
       timeout = true;
     }
 
+    // Check for EXT TOF timeout (5 seconds timeout for non-critical queries)
+    if (command_socket_->waiting_ext_tof() && 
+        now() - command_socket_->ext_tof_send_time() > rclcpp::Duration(5, 0)) {
+      RCLCPP_WARN(get_logger(), "EXT TOF query timed out");
+      // Reset the EXT TOF waiting state (will be done in timeout method)
+      command_socket_->timeout();
+    }
+
     if (timeout) {
       return;
     }
@@ -187,11 +195,11 @@ namespace tello_driver
     // EXT TOF Sensor Queries (forward-facing external sensor)
     //====
 
-    // Query EXT TOF sensor every 5 seconds if there are subscribers
+    // Query EXT TOF sensor every 1 second if there are subscribers
     static rclcpp::Time last_ext_tof_query = rclcpp::Time(0L, RCL_ROS_TIME);
     if (state_socket_->receiving() && video_socket_->receiving() && !command_socket_->waiting() &&
         ext_tof_pub_->get_subscription_count() > 0 &&
-        now() - last_ext_tof_query > rclcpp::Duration(5, 0)) {
+        now() - last_ext_tof_query > rclcpp::Duration(1, 0)) {
       command_socket_->query_ext_tof();
       last_ext_tof_query = now();
       return;

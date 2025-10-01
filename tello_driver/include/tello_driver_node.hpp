@@ -146,6 +146,10 @@ namespace tello_driver
 
     void query_ext_tof();
 
+    bool waiting_ext_tof();
+
+    rclcpp::Time ext_tof_send_time();
+
   private:
 
     void process_packet(size_t r) override;
@@ -157,6 +161,7 @@ namespace tello_driver
     udp::endpoint remote_endpoint_;
 
     rclcpp::Time send_time_;  // Time of most recent send
+    rclcpp::Time ext_tof_send_time_;  // Time of EXT TOF query (separate from send_time_)
     bool respond_;            // Send response on tello_response_pub_
     bool waiting_ = false;    // Are we waiting for a response?
     bool waiting_ext_tof_ = false; // Are we waiting for EXT TOF response?

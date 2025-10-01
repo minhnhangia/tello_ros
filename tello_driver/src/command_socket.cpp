@@ -7,7 +7,8 @@ namespace tello_driver
                                unsigned short drone_port, unsigned short command_port) :
     TelloSocket(driver, command_port),
     remote_endpoint_(asio::ip::address_v4::from_string(drone_ip), drone_port),
-    send_time_(rclcpp::Time(0L, RCL_ROS_TIME))
+    send_time_(rclcpp::Time(0L, RCL_ROS_TIME)),
+    ext_tof_send_time_(rclcpp::Time(0L, RCL_ROS_TIME))
   {
     buffer_ = std::vector<unsigned char>(1024);
     listen();
@@ -21,6 +22,11 @@ namespace tello_driver
     if (waiting_) {
       complete_command(tello_msgs::msg::TelloResponse::TIMEOUT, "error: command timed out");
     }
+    
+    // Reset EXT TOF waiting state on timeout
+    if (waiting_ext_tof_) {
+      waiting_ext_tof_ = false;
+    }
   }
 
   bool CommandSocket::waiting()
@@ -33,6 +39,18 @@ namespace tello_driver
   {
     std::lock_guard<std::mutex> lock(mtx_);
     return send_time_;
+  }
+
+  bool CommandSocket::waiting_ext_tof()
+  {
+    std::lock_guard<std::mutex> lock(mtx_);
+    return waiting_ext_tof_;
+  }
+
+  rclcpp::Time CommandSocket::ext_tof_send_time()
+  {
+    std::lock_guard<std::mutex> lock(mtx_);
+    return ext_tof_send_time_;
   }
 
   void CommandSocket::initiate_command(std::string command, bool respond)
@@ -69,21 +87,26 @@ namespace tello_driver
   {
     std::lock_guard<std::mutex> lock(mtx_);
 
-    if (waiting_) return;
+    // Don't interfere with other commands - EXT TOF is non-critical
+    if (waiting_) {
+      RCLCPP_DEBUG(driver_->get_logger(), "Skipping EXT TOF query - command in progress");
+      return;
+    }
     
     RCLCPP_DEBUG(driver_->get_logger(), "Querying EXT TOF sensor...");
 
     try
     {
       socket_.send_to(asio::buffer("EXT tof?"), remote_endpoint_);
-      send_time_ = driver_->now();
+      ext_tof_send_time_ = driver_->now();  // Use separate timing for EXT TOF
       respond_ = false;  // Handle response directly, don't publish to tello_response
-      waiting_ = true;
-      waiting_ext_tof_ = true;
+      // DO NOT set waiting_ = true - let other commands proceed normally
+      waiting_ext_tof_ = true;  // Only track EXT TOF state separately
     }
     catch (std::exception& e)
     {
       RCLCPP_ERROR(driver_->get_logger(), "Failed to query EXT TOF: %s", e.what());
+      waiting_ext_tof_ = false;  // Reset on error
     }
   }
 
@@ -113,20 +136,16 @@ namespace tello_driver
         
         RCLCPP_DEBUG(driver_->get_logger(), "EXT TOF: %dmm (%.3fm)", distance_mm, distance_m);
         
-        // Complete the command with success
-        complete_command(tello_msgs::msg::TelloResponse::OK, response);
-        
       } catch (const std::exception& e) {
         RCLCPP_ERROR(driver_->get_logger(), "Failed to parse EXT TOF response '%s': %s", 
                      response.c_str(), e.what());
-        complete_command(tello_msgs::msg::TelloResponse::ERROR, "error: invalid EXT TOF response");
       }
     } else {
       RCLCPP_ERROR(driver_->get_logger(), "Invalid EXT TOF response format: '%s'", response.c_str());
-      complete_command(tello_msgs::msg::TelloResponse::ERROR, "error: invalid EXT TOF response format");
     }
     
-    waiting_ = false;
+    // Note: Do NOT call complete_command() or set waiting_ = false since
+    // EXT TOF queries don't block other commands
   }
 
   void CommandSocket::complete_command(uint8_t rc, std::string str)
@@ -151,17 +170,17 @@ namespace tello_driver
     }
 
     std::string str = std::string(buffer_.begin(), buffer_.begin() + r);
-    if (waiting_) {
+    
+    // Handle EXT TOF responses specially (can arrive when waiting_ is false)
+    if (waiting_ext_tof_ && str.size() >= 5 && str.substr(0, 4) == "tof ") {
+      RCLCPP_DEBUG(driver_->get_logger(), "Received EXT TOF response: '%s'", str.c_str());
+      handle_ext_tof_response(str);
+      waiting_ext_tof_ = false;
+    }
+    else if (waiting_) {
       RCLCPP_DEBUG(driver_->get_logger(), "Received '%s'", str.c_str());
-      
-      // Handle EXT TOF responses specially
-      if (waiting_ext_tof_) {
-        handle_ext_tof_response(str);
-        waiting_ext_tof_ = false;
-      } else {
-        complete_command(str == "error" ? tello_msgs::msg::TelloResponse::ERROR : tello_msgs::msg::TelloResponse::OK,
-                         str);
-      }
+      complete_command(str == "error" ? tello_msgs::msg::TelloResponse::ERROR : tello_msgs::msg::TelloResponse::OK,
+                       str);
     } else {
       RCLCPP_WARN(driver_->get_logger(), "Unexpected '%s'", str.c_str());
     }
