@@ -65,6 +65,70 @@ namespace tello_driver
     }
   }
 
+  void CommandSocket::query_ext_tof()
+  {
+    std::lock_guard<std::mutex> lock(mtx_);
+
+    if (waiting_) return;
+    
+    RCLCPP_DEBUG(driver_->get_logger(), "Querying EXT TOF sensor...");
+
+    try
+    {
+      socket_.send_to(asio::buffer("EXT tof?"), remote_endpoint_);
+      send_time_ = driver_->now();
+      respond_ = false;  // Handle response directly, don't publish to tello_response
+      waiting_ = true;
+      waiting_ext_tof_ = true;
+    }
+    catch (std::exception& e)
+    {
+      RCLCPP_ERROR(driver_->get_logger(), "Failed to query EXT TOF: %s", e.what());
+    }
+  }
+
+  void CommandSocket::handle_ext_tof_response(const std::string& response)
+  {
+    // Parse EXT TOF response format: "tof XXX" where XXX is distance in millimeters
+    if (response.size() >= 5 && response.substr(0, 4) == "tof ") {
+      try {
+        std::string distance_str = response.substr(4);  // Skip "tof " prefix
+        int distance_mm = std::stoi(distance_str);
+        
+        // Convert to meters for ROS standard units
+        float distance_m = distance_mm / 1000.0f;
+        
+        // Create and populate Range message
+        sensor_msgs::msg::Range range_msg;
+        range_msg.header.stamp = driver_->now();
+        range_msg.header.frame_id = "ext_tof_link";  // Forward-facing external sensor frame
+        range_msg.radiation_type = sensor_msgs::msg::Range::INFRARED;
+        range_msg.field_of_view = 0.05f;  // ~3 degrees typical for TOF sensors
+        range_msg.min_range = 0.03f;      // 30mm minimum range
+        range_msg.max_range = 8.0f;       // 8m maximum range (typical for Tello expansion kit)
+        range_msg.range = distance_m;
+        
+        // Publish the range measurement
+        driver_->ext_tof_pub_->publish(range_msg);
+        
+        RCLCPP_DEBUG(driver_->get_logger(), "EXT TOF: %dmm (%.3fm)", distance_mm, distance_m);
+        
+        // Complete the command with success
+        complete_command(tello_msgs::msg::TelloResponse::OK, response);
+        
+      } catch (const std::exception& e) {
+        RCLCPP_ERROR(driver_->get_logger(), "Failed to parse EXT TOF response '%s': %s", 
+                     response.c_str(), e.what());
+        complete_command(tello_msgs::msg::TelloResponse::ERROR, "error: invalid EXT TOF response");
+      }
+    } else {
+      RCLCPP_ERROR(driver_->get_logger(), "Invalid EXT TOF response format: '%s'", response.c_str());
+      complete_command(tello_msgs::msg::TelloResponse::ERROR, "error: invalid EXT TOF response format");
+    }
+    
+    waiting_ = false;
+  }
+
   void CommandSocket::complete_command(uint8_t rc, std::string str)
   {
     if (respond_) {
@@ -89,8 +153,15 @@ namespace tello_driver
     std::string str = std::string(buffer_.begin(), buffer_.begin() + r);
     if (waiting_) {
       RCLCPP_DEBUG(driver_->get_logger(), "Received '%s'", str.c_str());
-      complete_command(str == "error" ? tello_msgs::msg::TelloResponse::ERROR : tello_msgs::msg::TelloResponse::OK,
-                       str);
+      
+      // Handle EXT TOF responses specially
+      if (waiting_ext_tof_) {
+        handle_ext_tof_response(str);
+        waiting_ext_tof_ = false;
+      } else {
+        complete_command(str == "error" ? tello_msgs::msg::TelloResponse::ERROR : tello_msgs::msg::TelloResponse::OK,
+                         str);
+      }
     } else {
       RCLCPP_WARN(driver_->get_logger(), "Unexpected '%s'", str.c_str());
     }

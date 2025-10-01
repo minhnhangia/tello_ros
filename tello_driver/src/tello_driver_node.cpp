@@ -44,6 +44,7 @@ namespace tello_driver
     flight_data_pub_ = create_publisher<tello_msgs::msg::FlightData>("flight_data", qos_profile);
     tello_response_pub_ = create_publisher<tello_msgs::msg::TelloResponse>("tello_response", 10);
     odom_pub_ = create_publisher<nav_msgs::msg::Odometry>("odom", qos_profile);
+    ext_tof_pub_ = create_publisher<sensor_msgs::msg::Range>("ext_tof", qos_profile);
 
     // ROS service
     command_srv_ = create_service<tello_msgs::srv::TelloAction>(
@@ -179,6 +180,20 @@ namespace tello_driver
     if (state_socket_->receiving() && video_socket_->receiving() && !command_socket_->waiting() &&
         now() - command_socket_->send_time() > rclcpp::Duration(KEEP_ALIVE, 0)) {
       command_socket_->initiate_command("rc 0 0 0 0", false);
+      return;
+    }
+
+    //====
+    // EXT TOF Sensor Queries (forward-facing external sensor)
+    //====
+
+    // Query EXT TOF sensor every 5 seconds if there are subscribers
+    static rclcpp::Time last_ext_tof_query = rclcpp::Time(0L, RCL_ROS_TIME);
+    if (state_socket_->receiving() && video_socket_->receiving() && !command_socket_->waiting() &&
+        ext_tof_pub_->get_subscription_count() > 0 &&
+        now() - last_ext_tof_query > rclcpp::Duration(5, 0)) {
+      command_socket_->query_ext_tof();
+      last_ext_tof_query = now();
       return;
     }
   }

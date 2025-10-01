@@ -5,6 +5,7 @@
 #include "geometry_msgs/msg/twist.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "sensor_msgs/msg/camera_info.hpp"
+#include "sensor_msgs/msg/range.hpp"
 #include "tf2/LinearMath/Quaternion.h"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 #include "tello_msgs/msg/flight_data.hpp"
@@ -54,6 +55,7 @@ namespace tello_driver
     rclcpp::Publisher<tello_msgs::msg::FlightData>::SharedPtr flight_data_pub_;
     rclcpp::Publisher<tello_msgs::msg::TelloResponse>::SharedPtr tello_response_pub_;
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_;
+    rclcpp::Publisher<sensor_msgs::msg::Range>::SharedPtr ext_tof_pub_;
 
     // Odometry helper method
     void publish_odometry(const tello_msgs::msg::FlightData& flight_data);
@@ -142,17 +144,22 @@ namespace tello_driver
 
     void initiate_command(std::string command, bool respond);
 
+    void query_ext_tof();
+
   private:
 
     void process_packet(size_t r) override;
 
     void complete_command(uint8_t rc, std::string str);
 
+    void handle_ext_tof_response(const std::string& response);
+
     udp::endpoint remote_endpoint_;
 
     rclcpp::Time send_time_;  // Time of most recent send
     bool respond_;            // Send response on tello_response_pub_
     bool waiting_ = false;    // Are we waiting for a response?
+    bool waiting_ext_tof_ = false; // Are we waiting for EXT TOF response?
   };
 
   //=====================================================================================

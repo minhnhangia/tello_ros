@@ -100,6 +100,24 @@
         <child link="camera_link${suffix}"/>
     </joint>
 
+    <!-- EXT TOF link (forward-facing external sensor from expansion kit) -->
+    <link name="ext_tof_link${suffix}">
+        <visual>
+            <origin xyz="0 0 0"/>
+            <geometry>
+                <box size="0.005 0.01 0.005"/>
+            </geometry>
+            <material name="red"/>
+        </visual>
+    </link>
+
+    <!-- EXT TOF joint (mounted on front of drone, slightly above camera) -->
+    <joint name="ext_tof_joint${suffix}" type="fixed">
+        <origin xyz="0.04 0 0.01" rpy="0 0 0"/>  <!-- Forward-facing, above camera -->
+        <parent link="base_link${suffix}"/>
+        <child link="ext_tof_link${suffix}"/>
+    </joint>
+
     <!-- Tello plugin for Gazebo -->
     <gazebo>
         <plugin name="TelloPlugin" filename="libTelloPlugin.so">
