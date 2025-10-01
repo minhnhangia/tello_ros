@@ -65,9 +65,12 @@ namespace tello_driver
     std::string odom_frame_id_;
     std::string base_frame_id_;
 
+    bool is_first_init_ = false;
+
   private:
 
     void timer_callback();
+    void ext_tof_timer_callback();  // Dedicated EXT TOF timer callback
 
     void command_callback(
       const std::shared_ptr<rmw_request_id_t> request_header,
@@ -87,8 +90,9 @@ namespace tello_driver
     // ROS subscriptions
     rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_sub_;
 
-    // ROS timer
-    rclcpp::TimerBase::SharedPtr spin_timer_;
+    // ROS timers
+    rclcpp::TimerBase::SharedPtr spin_timer_;           // Main timer at 1 Hz
+    rclcpp::TimerBase::SharedPtr ext_tof_timer_;        // EXT TOF timer at 5 Hz
   };
 
   //=====================================================================================
