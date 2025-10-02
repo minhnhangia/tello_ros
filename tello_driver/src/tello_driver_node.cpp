@@ -111,10 +111,10 @@ namespace tello_driver
     // TODO cmd_vel should specify velocity, not joystick position
     if (!command_socket_->waiting()) {
       std::ostringstream rc;
-      rc << "rc " << static_cast<int>(round(msg->linear.y))
-         << " " << static_cast<int>(round(msg->linear.x))
-         << " " << static_cast<int>(round(msg->linear.z))
-         << " " << static_cast<int>(round(msg->angular.z));
+      rc << "rc " << static_cast<int>(round(msg->linear.y * 100))
+         << " " << static_cast<int>(round(msg->linear.x * 100))
+         << " " << static_cast<int>(round(msg->linear.z * 100))
+         << " " << static_cast<int>(round(msg->angular.z * 100));
       command_socket_->initiate_command(rc.str(), false);
     }
   }
@@ -202,7 +202,7 @@ namespace tello_driver
     if (command_socket_->waiting_ext_tof() && 
         now() - command_socket_->ext_tof_send_time() > rclcpp::Duration(1, 0))
     {
-      RCLCPP_WARN(get_logger(), "EXT TOF query timed out");
+      // RCLCPP_WARN(get_logger(), "EXT TOF query timed out");
       // Reset the EXT TOF waiting state
       command_socket_->timeout();
       return;
