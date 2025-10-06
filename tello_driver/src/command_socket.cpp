@@ -1,5 +1,8 @@
 #include "tello_driver_node.hpp"
 
+#include <algorithm>
+#include <cctype>
+
 namespace tello_driver
 {
 
@@ -65,6 +68,7 @@ namespace tello_driver
     {
       socket_.send_to(asio::buffer(command), remote_endpoint_);
       send_time_ = driver_->now();
+      last_command_ = command;
 
       // Wait for a response for all commands except "rc"
       if (command.rfind("rc", 0) != 0) 
@@ -184,8 +188,29 @@ namespace tello_driver
     else if (waiting_)
     {
       RCLCPP_DEBUG(driver_->get_logger(), "Received '%s'", str.c_str());
-      complete_command(str == "error" ? tello_msgs::msg::TelloResponse::ERROR : tello_msgs::msg::TelloResponse::OK,
+      const bool ok = (str != "error");
+      complete_command(ok ? tello_msgs::msg::TelloResponse::OK : tello_msgs::msg::TelloResponse::ERROR,
                        str);
+
+      // Handle downvision camera switch when command succeeds
+      if (ok) 
+      {
+        // Normalize command to lowercase for matching
+        std::string cmd = last_command_;
+        std::transform(cmd.begin(), cmd.end(), cmd.begin(), [](unsigned char c){ return std::tolower(c); });
+        if (cmd.rfind("downvision", 0) == 0) 
+        {
+          // Expect format: "downvision 0" or "downvision 1"
+          // Extract the argument after space
+          bool active = false;
+          auto pos = cmd.find_first_of(' ');
+          if (pos != std::string::npos) {
+            std::string arg = cmd.substr(pos + 1);
+            active = (arg == "1" || arg == "on" || arg == "true");
+          }
+          driver_->set_downvision_active(active);
+        }
+      }
     } 
     else 
     {

@@ -14,9 +14,14 @@ namespace tello_driver
   CXT_MACRO_MEMBER(data_port, int, 8890)                  /* Flight data will arrive at this port */ \
   CXT_MACRO_MEMBER(video_port, int, 11111)                /* Video data will arrive at this port */ \
   CXT_MACRO_MEMBER(camera_info_path, std::string, \
-    "install/tello_driver/share/tello_driver/cfg/camera_info.yaml") /* Camera calibration path */ \
+    "install/tello_driver/share/tello_driver/cfg/camera_info.yaml") /* Forward camera calibration path */ \
+  CXT_MACRO_MEMBER(camera_info_path_down, std::string, \
+    "install/tello_driver/share/tello_driver/cfg/camera_down_info.yaml") /* Downward camera calibration path (optional) */ \
   CXT_MACRO_MEMBER(odom_frame_id, std::string, std::string("odom")) /* Odometry frame ID */ \
   CXT_MACRO_MEMBER(base_frame_id, std::string, std::string("base_link")) /* Base frame ID */ \
+  CXT_MACRO_MEMBER(camera_frame_id_forward, std::string, std::string("camera_frame")) /* Forward camera frame ID */ \
+  CXT_MACRO_MEMBER(camera_frame_id_down, std::string, std::string("camera_down_frame")) /* Downward camera frame ID */ \
+  CXT_MACRO_MEMBER(publish_down_as_mono, bool, true) /* Publish downvision as MONO8 instead of RGB8 */ \
   /* End of list */
 
   struct TelloDriverContext
@@ -81,7 +86,14 @@ namespace tello_driver
     // Sockets
     command_socket_ = std::make_unique<CommandSocket>(this, cxt.drone_ip_, cxt.drone_port_, cxt.command_port_);
     state_socket_ = std::make_unique<StateSocket>(this, cxt.data_port_);
-    video_socket_ = std::make_unique<VideoSocket>(this, cxt.video_port_, cxt.camera_info_path_);
+    video_socket_ = std::make_unique<VideoSocket>(
+      this,
+      cxt.video_port_,
+      cxt.camera_info_path_,
+      cxt.camera_info_path_down_,
+      cxt.camera_frame_id_forward_,
+      cxt.camera_frame_id_down_,
+      cxt.publish_down_as_mono_);
   }
 
   TelloDriverNode::~TelloDriverNode()
@@ -116,6 +128,13 @@ namespace tello_driver
          << " " << static_cast<int>(round(msg->linear.z * 100))
          << " " << static_cast<int>(round(msg->angular.z * 100));
       command_socket_->initiate_command(rc.str(), false);
+    }
+  }
+  void TelloDriverNode::set_downvision_active(bool active)
+  {
+    // Pass-through to VideoSocket to update calibration and frame IDs
+    if (video_socket_) {
+      video_socket_->set_downvision_active(active);
     }
   }
 

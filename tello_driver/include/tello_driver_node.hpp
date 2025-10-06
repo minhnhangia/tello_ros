@@ -60,6 +60,9 @@ namespace tello_driver
     // Odometry helper method
     void publish_odometry(const tello_msgs::msg::FlightData& flight_data);
 
+  // Switch active camera (false = forward camera, true = downward camera)
+  void set_downvision_active(bool active);
+
   private:
     // Frame IDs for odometry
     std::string odom_frame_id_;
@@ -169,6 +172,9 @@ namespace tello_driver
     bool respond_;            // Send response on tello_response_pub_
     bool waiting_ = false;    // Are we waiting for a response?
     bool waiting_ext_tof_ = false; // Are we waiting for EXT TOF response?
+
+    // Track last command to enable state updates on OK responses
+    std::string last_command_;
   };
 
   //=====================================================================================
@@ -196,7 +202,16 @@ namespace tello_driver
   {
   public:
 
-    VideoSocket(TelloDriverNode *driver, unsigned short video_port, const std::string &camera_info_path);
+    VideoSocket(TelloDriverNode *driver,
+                unsigned short video_port,
+                const std::string &camera_info_path_forward,
+                const std::string &camera_info_path_down,
+                const std::string &frame_id_forward,
+                const std::string &frame_id_down,
+                bool publish_down_as_mono);
+
+    // Toggle between forward and downward camera at runtime
+    void set_downvision_active(bool active);
 
   private:
 
@@ -212,6 +227,14 @@ namespace tello_driver
     ConverterRGB24 converter_;                // Converts pixels from YUV420P to BGR24
 
     sensor_msgs::msg::CameraInfo camera_info_msg_;
+
+    // Runtime switching support
+    bool downvision_active_ = false;
+    std::string camera_info_path_forward_;
+    std::string camera_info_path_down_;
+    std::string frame_id_forward_;
+    std::string frame_id_down_;
+    bool publish_down_as_mono_ = true;
   };
 
 } // namespace tello_driver
