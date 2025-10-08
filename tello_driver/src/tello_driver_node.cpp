@@ -21,7 +21,7 @@ namespace tello_driver
   CXT_MACRO_MEMBER(base_frame_id, std::string, std::string("base_link")) /* Base frame ID */ \
   CXT_MACRO_MEMBER(camera_frame_id_forward, std::string, std::string("camera_frame")) /* Forward camera frame ID */ \
   CXT_MACRO_MEMBER(camera_frame_id_down, std::string, std::string("camera_down_frame")) /* Downward camera frame ID */ \
-  CXT_MACRO_MEMBER(publish_down_as_mono, bool, true) /* Publish downvision as MONO8 instead of RGB8 */ \
+  CXT_MACRO_MEMBER(publish_down_as_mono, bool, false) \
   /* End of list */
 
   struct TelloDriverContext
@@ -113,6 +113,7 @@ namespace tello_driver
       RCLCPP_WARN(get_logger(), "Busy, dropping '%s'", request->cmd.c_str());
       response->rc = response->ERROR_BUSY;
     } else {
+      RCLCPP_INFO(get_logger(), "Command received: '%s'", request->cmd.c_str());
       command_socket_->initiate_command(request->cmd, true);
       response->rc = response->OK;
     }
@@ -197,7 +198,7 @@ namespace tello_driver
     // Keep-alive, drone will auto-land if it hears nothing for 15s
     //====
 
-    if (state_socket_->receiving() && video_socket_->receiving() && !command_socket_->waiting() &&
+    if (state_socket_->receiving() && !command_socket_->waiting() &&
         now() - command_socket_->send_time() > rclcpp::Duration(KEEP_ALIVE, 0)) {
       command_socket_->initiate_command("rc 0 0 0 0", false);
       return;
