@@ -34,7 +34,7 @@ namespace tello_driver
   constexpr int32_t STATE_TIMEOUT = 4;      // We stopped receiving telemetry
   constexpr int32_t VIDEO_TIMEOUT = 4;      // We stopped receiving video
   constexpr int32_t KEEP_ALIVE = 12;        // We stopped receiving input from other ROS nodes
-  constexpr int32_t COMMAND_TIMEOUT = 9;    // Drone didn't respond to a command
+  constexpr int32_t COMMAND_TIMEOUT = 7;    // Drone didn't respond to a command
 
   TelloDriverNode::TelloDriverNode(const rclcpp::NodeOptions &options) :
     Node("tello_driver", options)
