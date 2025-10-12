@@ -37,10 +37,9 @@ find_package(tf2_geometry_msgs REQUIRED)
 
 # Package includes not needed for CMake >= 2.8.11
 include_directories(
-  include
-  h264decoder)
+  include)
 
-# h264decoder uses deprecated ffmpeg calls, turn off the warnings
+# Silence some deprecation warnings globally if needed
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations")
 
 # Create ament index resource which references the libraries in the binary dir
@@ -55,8 +54,7 @@ set(DRIVER_NODE_SOURCES
   src/tello_socket.cpp
   src/command_socket.cpp
   src/state_socket.cpp
-  src/video_socket.cpp
-  h264decoder/h264decoder.cpp)
+  )
 
 set(DRIVER_NODE_DEPS
   camera_calibration_parsers
@@ -75,9 +73,7 @@ set(DRIVER_NODE_DEPS
   tf2_geometry_msgs)
 
 set(DRIVER_NODE_LIBS
-  avcodec
-  avutil
-  swscale)
+  )
 
 add_library(tello_driver_node SHARED
   ${DRIVER_NODE_SOURCES})
@@ -91,7 +87,7 @@ ament_target_dependencies(tello_driver_node
 rclcpp_components_register_nodes(tello_driver_node "tello_driver::TelloDriverNode")
 set(node_plugins "${node_plugins}tello_driver::TelloDriverNode;$<TARGET_FILE:tello_driver_node>\n")
 
-# Can't find_package(ffmpeg), so ament_target_dependencies won't work
+# No direct FFmpeg linkage needed; OpenCV's FFmpeg backend handles decoding
 target_link_libraries(tello_driver_node
   ${DRIVER_NODE_LIBS})
 
@@ -158,7 +154,6 @@ add_executable(tello_driver_main
 ament_target_dependencies(tello_driver_main
   ${DRIVER_NODE_DEPS})
 
-# Can't find_package(ffmpeg), so ament_target_dependencies won't work
 target_link_libraries(tello_driver_main
   ${DRIVER_NODE_LIBS})
 

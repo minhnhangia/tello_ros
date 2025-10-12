@@ -12,7 +12,8 @@
 #include "tello_msgs/msg/tello_response.hpp"
 #include "tello_msgs/srv/tello_action.hpp"
 
-#include "h264decoder.hpp"
+#include <opencv2/core.hpp>
+#include <opencv2/videoio.hpp>
 
 using asio::ip::udp;
 
@@ -22,8 +23,6 @@ namespace tello_driver
   class CommandSocket;
 
   class StateSocket;
-
-  class VideoSocket;
 
   //=====================================================================================
   // Tello driver implements Tello SDK 1.3 and 2.0
@@ -85,7 +84,6 @@ namespace tello_driver
     // Sockets
     std::unique_ptr<CommandSocket> command_socket_;
     std::unique_ptr<StateSocket> state_socket_;
-    std::unique_ptr<VideoSocket> video_socket_;
 
     // ROS services
     rclcpp::Service<tello_msgs::srv::TelloAction>::SharedPtr command_srv_;
@@ -96,6 +94,33 @@ namespace tello_driver
     // ROS timers
     rclcpp::TimerBase::SharedPtr spin_timer_;           // Main timer at 1 Hz
     rclcpp::TimerBase::SharedPtr ext_tof_timer_;        // EXT TOF timer at 5 Hz
+    rclcpp::TimerBase::SharedPtr video_timer_;          // Video grabbing timer
+
+    //=============================
+    // OpenCV + FFmpeg video pipeline
+    //=============================
+  private:
+    // Video capture state
+    cv::VideoCapture video_capture_;
+    cv::Mat video_frame_;
+    bool video_opened_ = false;          // VideoCapture successfully opened
+    bool video_receiving_ = false;       // Receiving frames recently
+    bool video_open_attempted_ = false;  // Prevent hot-looping on open failures
+    std::string video_stream_url_;       // e.g. udp://0.0.0.0:11111
+    rclcpp::Time video_receive_time_{};  // Time of most recent frame
+
+    // Camera calibration + frame IDs
+    bool downvision_active_ = false;
+    bool publish_down_as_mono_ = false;
+    std::string camera_info_path_forward_;
+    std::string camera_info_path_down_;
+    std::string frame_id_forward_;
+    std::string frame_id_down_;
+    sensor_msgs::msg::CameraInfo camera_info_msg_;
+
+    // Helpers
+    void video_timer_callback();
+    void load_camera_info();
   };
 
   //=====================================================================================
@@ -192,49 +217,6 @@ namespace tello_driver
     void process_packet(size_t r) override;
 
     uint8_t sdk_ = tello_msgs::msg::FlightData::SDK_UNKNOWN;  // Tello SDK version
-  };
-
-  //=====================================================================================
-  // Video socket
-  //=====================================================================================
-
-  class VideoSocket : public TelloSocket
-  {
-  public:
-
-    VideoSocket(TelloDriverNode *driver,
-                unsigned short video_port,
-                const std::string &camera_info_path_forward,
-                const std::string &camera_info_path_down,
-                const std::string &frame_id_forward,
-                const std::string &frame_id_down,
-                bool publish_down_as_mono);
-
-    // Toggle between forward and downward camera at runtime
-    void set_downvision_active(bool active);
-
-  private:
-
-    void process_packet(size_t r) override;
-
-    void decode_frames();
-
-    std::vector<unsigned char> seq_buffer_;   // Collect video packets into a larger sequence
-    size_t seq_buffer_next_ = 0;              // Next available spot in the sequence buffer
-    int seq_buffer_num_packets_ = 0;          // How many packets we've collected, for debugging
-
-    H264Decoder decoder_;                     // Decodes h264
-    ConverterRGB24 converter_;                // Converts pixels from YUV420P to BGR24
-
-    sensor_msgs::msg::CameraInfo camera_info_msg_;
-
-    // Runtime switching support
-    bool downvision_active_ = false;
-    std::string camera_info_path_forward_;
-    std::string camera_info_path_down_;
-    std::string frame_id_forward_;
-    std::string frame_id_down_;
-    bool publish_down_as_mono_ = true;
   };
 
 } // namespace tello_driver

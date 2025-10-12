@@ -1,6 +1,8 @@
 #include "tello_driver_node.hpp"
 
 #include "ros2_shared/context_macros.hpp"
+#include "camera_calibration_parsers/parse.hpp"
+#include <opencv2/imgproc.hpp>
 
 using asio::ip::udp;
 
@@ -13,6 +15,7 @@ namespace tello_driver
   CXT_MACRO_MEMBER(command_port, int, 38065)              /* Send commands from this port */ \
   CXT_MACRO_MEMBER(data_port, int, 8890)                  /* Flight data will arrive at this port */ \
   CXT_MACRO_MEMBER(video_port, int, 11111)                /* Video data will arrive at this port */ \
+  CXT_MACRO_MEMBER(video_stream_url, std::string, std::string("udp://0.0.0.0:11111")) /* OpenCV/FFmpeg URL */ \
   CXT_MACRO_MEMBER(camera_info_path, std::string, \
     "install/tello_driver/share/tello_driver/cfg/camera_info.yaml") /* Forward camera calibration path */ \
   CXT_MACRO_MEMBER(camera_info_path_down, std::string, \
@@ -34,7 +37,7 @@ namespace tello_driver
   constexpr int32_t STATE_TIMEOUT = 4;      // We stopped receiving telemetry
   constexpr int32_t VIDEO_TIMEOUT = 4;      // We stopped receiving video
   constexpr int32_t KEEP_ALIVE = 12;        // We stopped receiving input from other ROS nodes
-  constexpr int32_t COMMAND_TIMEOUT = 7;    // Drone didn't respond to a command
+  constexpr int32_t COMMAND_TIMEOUT = 9;    // Drone didn't respond to a command
 
   TelloDriverNode::TelloDriverNode(const rclcpp::NodeOptions &options) :
     Node("tello_driver", options)
@@ -86,14 +89,20 @@ namespace tello_driver
     // Sockets
     command_socket_ = std::make_unique<CommandSocket>(this, cxt.drone_ip_, cxt.drone_port_, cxt.command_port_);
     state_socket_ = std::make_unique<StateSocket>(this, cxt.data_port_);
-    video_socket_ = std::make_unique<VideoSocket>(
-      this,
-      cxt.video_port_,
-      cxt.camera_info_path_,
-      cxt.camera_info_path_down_,
-      cxt.camera_frame_id_forward_,
-      cxt.camera_frame_id_down_,
-      cxt.publish_down_as_mono_);
+    // OpenCV VideoCapture pipeline replaces VideoSocket
+    publish_down_as_mono_ = cxt.publish_down_as_mono_;
+    camera_info_path_forward_ = cxt.camera_info_path_;
+    camera_info_path_down_ = cxt.camera_info_path_down_;
+    frame_id_forward_ = cxt.camera_frame_id_forward_;
+    frame_id_down_ = cxt.camera_frame_id_down_;
+    video_stream_url_ = cxt.video_stream_url_;
+
+    // Load forward camera info initially
+    load_camera_info();
+
+    // Create a timer to grab frames; 33ms ~ 30 FPS
+    using namespace std::chrono_literals;
+    video_timer_ = create_wall_timer(33ms, std::bind(&TelloDriverNode::video_timer_callback, this));
   }
 
   TelloDriverNode::~TelloDriverNode()
@@ -106,7 +115,7 @@ namespace tello_driver
     std::shared_ptr<tello_msgs::srv::TelloAction::Response> response)
   {
     (void) request_header;
-    if (!state_socket_->receiving() || !video_socket_->receiving()) {
+    if (!state_socket_->receiving() || !video_receiving_) {
       RCLCPP_WARN(get_logger(), "Not connected, dropping '%s'", request->cmd.c_str());
       response->rc = response->ERROR_NOT_CONNECTED;
     } else if (command_socket_->waiting()) {
@@ -133,10 +142,9 @@ namespace tello_driver
   }
   void TelloDriverNode::set_downvision_active(bool active)
   {
-    // Pass-through to VideoSocket to update calibration and frame IDs
-    if (video_socket_) {
-      video_socket_->set_downvision_active(active);
-    }
+    // Toggle active camera; reload calibration
+    downvision_active_ = active;
+    load_camera_info();
   }
 
   // Do work every 1s
@@ -146,24 +154,41 @@ namespace tello_driver
     // Startup
     //====
 
-    if (!state_socket_->receiving() && !command_socket_->waiting()) {
+    if (!state_socket_->receiving() && !command_socket_->waiting())
+    {
       // First command to the drone must be "command"
       command_socket_->initiate_command("command", false);
       return;
     }
 
-    if (state_socket_->receiving() && !video_socket_->receiving() && !command_socket_->waiting()) {
-      // Configure video settings before starting stream
+    // Configure/start video using Tello commands and OpenCV VideoCapture
+    if (state_socket_->receiving() && !video_opened_ && !command_socket_->waiting()) {
+      // Configure video settings before starting stream on the drone
       static bool fps_configured = false;
       if (!fps_configured) {
         command_socket_->initiate_command("setfps middle", false);
         fps_configured = true;
+        RCLCPP_INFO(get_logger(), "Set video FPS to middle");
         return;
       }
-      
-      // Start video after FPS is configured
+      // Start video on the drone
       command_socket_->initiate_command("streamon", false);
-      return;
+      // Try to open local receiver after sending streamon
+      if (!video_open_attempted_) {
+        video_open_attempted_ = true;
+        // Prefer FFmpeg backend to ensure H264 over UDP support
+        if (video_capture_.open(video_stream_url_, cv::CAP_FFMPEG)) {
+          video_opened_ = video_capture_.isOpened();
+          if (video_opened_) {
+            RCLCPP_INFO(get_logger(), "Opened video stream via OpenCV: %s", video_stream_url_.c_str());
+          } else {
+            RCLCPP_ERROR(get_logger(), "Failed to open video stream: %s", video_stream_url_.c_str());
+          }
+        } else {
+          RCLCPP_ERROR(get_logger(), "OpenCV failed to open stream URL: %s", video_stream_url_.c_str());
+        }
+      }
+      return;  
     }
 
     //====
@@ -184,9 +209,9 @@ namespace tello_driver
       timeout = true;
     }
 
-    if (video_socket_->receiving() && now() - video_socket_->receive_time() > rclcpp::Duration(VIDEO_TIMEOUT, 0)) {
+    if (video_opened_ && video_receiving_ && now() - video_receive_time_ > rclcpp::Duration(VIDEO_TIMEOUT, 0)) {
       RCLCPP_ERROR(get_logger(), "No video received for 5s");
-      video_socket_->timeout();
+      video_receiving_ = false;
       timeout = true;
     }
 
@@ -204,7 +229,7 @@ namespace tello_driver
       return;
     }
 
-    if (!is_first_init_)
+    if (!is_first_init_ && state_socket_->receiving() && video_receiving_)
     {
       RCLCPP_INFO(get_logger(), "Tello driver initialized!");
       is_first_init_ = true;
@@ -229,7 +254,7 @@ namespace tello_driver
     }
 
     // EXT TOF Sensor Queries (forward-facing external sensor) at 5Hz
-    if (state_socket_->receiving() && video_socket_->receiving() && 
+    if (state_socket_->receiving() && video_receiving_ && 
         !command_socket_->waiting() && !command_socket_->waiting_ext_tof() &&
         ext_tof_pub_->get_subscription_count() > 0) 
     {
@@ -297,6 +322,83 @@ namespace tello_driver
 
     // Publish the odometry message
     odom_pub_->publish(odom_msg);
+  }
+
+  //=============================
+  // OpenCV video timer callback
+  //=============================
+  void TelloDriverNode::video_timer_callback()
+  {
+    if (!video_opened_) {
+      return;
+    }
+
+    // Grab frame
+    if (!video_capture_.read(video_frame_)) {
+      // read() returns false on failure/end; keep trying
+      return;
+    }
+
+    if (video_frame_.empty()) {
+      return;
+    }
+
+    // Mark receiving and update timestamp
+    video_receiving_ = true;
+    video_receive_time_ = now();
+
+    // Publish image if there are subscribers
+    if (count_subscribers(image_pub_->get_topic_name()) > 0) {
+      // OpenCV provides BGR; use bgr8 encoding
+      std_msgs::msg::Header header{};
+      header.stamp = video_receive_time_;
+      header.frame_id = downvision_active_ ? frame_id_down_ : frame_id_forward_;
+
+      // Optionally publish mono for downvision by converting BGR->GRAY
+      const bool publish_mono = (downvision_active_ && publish_down_as_mono_);
+      if (publish_mono) {
+        cv::Mat gray;
+        cv::cvtColor(video_frame_, gray, cv::COLOR_BGR2GRAY);
+        cv_bridge::CvImage cv_image{header, sensor_msgs::image_encodings::MONO8, gray};
+        sensor_msgs::msg::Image msg;
+        cv_image.toImageMsg(msg);
+        image_pub_->publish(msg);
+      } else {
+        cv_bridge::CvImage cv_image{header, sensor_msgs::image_encodings::BGR8, video_frame_};
+        sensor_msgs::msg::Image msg;
+        cv_image.toImageMsg(msg);
+        image_pub_->publish(msg);
+      }
+    }
+
+    // Publish CameraInfo if there are subscribers
+    if (count_subscribers(camera_info_pub_->get_topic_name()) > 0) {
+      camera_info_msg_.width = video_frame_.cols;
+      camera_info_msg_.height = video_frame_.rows;
+      camera_info_msg_.header.stamp = video_receive_time_;
+      camera_info_msg_.header.frame_id = downvision_active_ ? frame_id_down_ : frame_id_forward_;
+      camera_info_pub_->publish(camera_info_msg_);
+    }
+  }
+
+  void TelloDriverNode::load_camera_info()
+  {
+    const std::string &path = (downvision_active_ && !camera_info_path_down_.empty())
+      ? camera_info_path_down_ : camera_info_path_forward_;
+
+    std::string camera_name;
+    sensor_msgs::msg::CameraInfo loaded;
+    if (camera_calibration_parsers::readCalibration(path, camera_name, loaded))
+    {
+      camera_info_msg_ = loaded;
+      RCLCPP_INFO(get_logger(), "Parsed camera info for '%s' from '%s'", camera_name.c_str(), path.c_str());
+    }
+    else
+    {
+      RCLCPP_WARN(get_logger(), "Cannot read camera info from '%s' (downvision=%s). Using existing calibration.",
+                  path.c_str(), downvision_active_ ? "true" : "false");
+    }
+    camera_info_msg_.header.frame_id = downvision_active_ ? frame_id_down_ : frame_id_forward_;
   }
 
 } // namespace tello_driver
