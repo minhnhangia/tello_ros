@@ -1,6 +1,7 @@
 #include "tello_driver_node.hpp"
 
 #include "ros2_shared/context_macros.hpp"
+#include <algorithm>
 
 using asio::ip::udp;
 
@@ -13,6 +14,10 @@ namespace tello_driver
   CXT_MACRO_MEMBER(command_port, int, 38065)              /* Send commands from this port */ \
   CXT_MACRO_MEMBER(data_port, int, 8890)                  /* Flight data will arrive at this port */ \
   CXT_MACRO_MEMBER(video_port, int, 11111)                /* Video data will arrive at this port */ \
+  /* Optional video configuration sent before streamon. Empty/negative => skip. */ \
+  CXT_MACRO_MEMBER(video_fps, std::string, std::string("middle"))              /* one of: low|middle|high */ \
+  CXT_MACRO_MEMBER(video_resolution, std::string, std::string("low"))       /* one of: low|high (720p vs 480p) */ \
+  CXT_MACRO_MEMBER(video_bitrate, int, 3)                                    /* kbps level: 0..5, 0=auto */ \
   CXT_MACRO_MEMBER(camera_info_path, std::string, \
     "install/tello_driver/share/tello_driver/cfg/camera_info.yaml") /* Forward camera calibration path */ \
   CXT_MACRO_MEMBER(camera_info_path_down, std::string, \
@@ -91,6 +96,11 @@ namespace tello_driver
       cxt.camera_frame_id_down_,
       cxt.publish_down_as_mono_);
 
+    // Store desired video configuration
+    video_fps_ = cxt.video_fps_;
+    video_resolution_ = cxt.video_resolution_;
+    video_bitrate_ = cxt.video_bitrate_;
+
     // ROS timers
     using namespace std::chrono_literals;
     spin_timer_ = create_wall_timer(1s, std::bind(&TelloDriverNode::timer_callback, this));
@@ -158,17 +168,42 @@ namespace tello_driver
     }
 
     if (state_socket_->receiving() && !video_socket_->receiving() && !command_socket_->waiting()) {
-      // Configure video settings before starting stream
-      static bool fps_configured = false;
-      if (!fps_configured) {
-        command_socket_->initiate_command("setfps middle", false);
-        fps_configured = true;
-        return;
+      // Before starting the video stream, configure resolution/fps/bitrate as requested.
+      switch (video_config_state_) {
+        case VideoConfigState::SetResolution:
+          if (!video_resolution_.empty()) {
+            std::string cmd = std::string("setresolution ") + video_resolution_;
+            RCLCPP_INFO(get_logger(), "Configuring video resolution: %s", cmd.c_str());
+            command_socket_->initiate_command(cmd, false);
+          }
+          video_config_state_ = VideoConfigState::SetFps;
+          return;
+        case VideoConfigState::SetFps:
+          if (!video_fps_.empty()) {
+            std::string cmd = std::string("setfps ") + video_fps_;
+            RCLCPP_INFO(get_logger(), "Configuring video FPS: %s", cmd.c_str());
+            command_socket_->initiate_command(cmd, false);
+          }
+          video_config_state_ = VideoConfigState::SetBitrate;
+          return;
+        case VideoConfigState::SetBitrate:
+          if (video_bitrate_ >= 0) {
+            // Tello SDK uses levels 0..5 (0=auto). We'll clamp and send.
+            int lvl = std::max(0, std::min(5, video_bitrate_));
+            std::string cmd = std::string("setbitrate ") + std::to_string(lvl);
+            RCLCPP_INFO(get_logger(), "Configuring video bitrate: %s", cmd.c_str());
+            command_socket_->initiate_command(cmd, false);
+          }
+          video_config_state_ = VideoConfigState::StreamOn;
+          return;
+        case VideoConfigState::StreamOn:
+          RCLCPP_INFO(get_logger(), "Starting video stream (streamon)");
+          command_socket_->initiate_command("streamon", false);
+          video_config_state_ = VideoConfigState::Done;
+          return;
+        case VideoConfigState::Done:
+          break;
       }
-      
-      // Start video after FPS is configured
-      command_socket_->initiate_command("streamon", false);
-      return;
     }
 
     //====

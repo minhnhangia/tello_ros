@@ -70,6 +70,22 @@ namespace tello_driver
 
     bool is_first_init_ = false;
 
+    // Video config parameters (applied before stream starts)
+    // Acceptable values match Tello SDK: fps {"low","middle","high"},
+    // resolution {"low","high"}, bitrate {-1 to skip, or 0..5 where 0=auto}
+    std::string video_fps_ = "";         // empty => skip
+    std::string video_resolution_ = "";  // empty => skip
+    int video_bitrate_ = -1;              // -1 => skip
+
+    enum class VideoConfigState {
+      SetResolution = 0,
+      SetFps,
+      SetBitrate,
+      StreamOn,
+      Done
+    };
+    VideoConfigState video_config_state_ = VideoConfigState::SetResolution;
+
   private:
 
     void timer_callback();
@@ -225,6 +241,8 @@ namespace tello_driver
 
     H264Decoder decoder_;                     // Decodes h264
     ConverterRGB24 converter_;                // Converts pixels from YUV420P to BGR24
+  // Persistent RGB buffer to avoid large stack allocations and potential overflows
+  std::vector<unsigned char> rgb_buffer_;
 
     sensor_msgs::msg::CameraInfo camera_info_msg_;
 

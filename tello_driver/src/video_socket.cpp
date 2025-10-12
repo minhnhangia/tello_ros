@@ -134,17 +134,34 @@ namespace tello_driver
           if (downvision_active_ && publish_down_as_mono_ && frame.format == AV_PIX_FMT_YUV420P)
           {
             // Use Y plane (grayscale). Account for possible stride.
-            mat = cv::Mat{frame.height, frame.width, CV_8UC1, frame.data[0], static_cast<size_t>(frame.linesize[0])};
-            encoding = sensor_msgs::image_encodings::MONO8;
+            if (frame.width <= 0 || frame.height <= 0 || frame.data[0] == nullptr || frame.linesize[0] <= 0) {
+              RCLCPP_WARN(driver_->get_logger(), "Skipping invalid MONO frame w=%d h=%d ls=%d", frame.width, frame.height, frame.linesize[0]);
+              encoding.clear();
+            } else {
+              mat = cv::Mat{frame.height, frame.width, CV_8UC1, frame.data[0], static_cast<size_t>(frame.linesize[0])};
+              encoding = sensor_msgs::image_encodings::MONO8;
+            }
           }
           else
           {
             // Convert pixels from YUV420P (or current pix_fmt) to RGB24
-            int size = converter_.predict_size(frame.width, frame.height);
-            unsigned char rgb24[size];
-            converter_.convert(frame, rgb24);
-            mat = cv::Mat{frame.height, frame.width, CV_8UC3, rgb24};
-            encoding = sensor_msgs::image_encodings::RGB8;
+            if (frame.width <= 0 || frame.height <= 0) {
+              RCLCPP_WARN(driver_->get_logger(), "Skipping invalid RGB frame w=%d h=%d", frame.width, frame.height);
+              encoding.clear();
+            } else {
+              int required = converter_.predict_size(frame.width, frame.height);
+              if (required <= 0) {
+                RCLCPP_WARN(driver_->get_logger(), "Predict size failed for w=%d h=%d", frame.width, frame.height);
+                encoding.clear();
+              } else {
+                if (rgb_buffer_.size() < static_cast<size_t>(required)) {
+                  rgb_buffer_.resize(required);
+                }
+                converter_.convert(frame, rgb_buffer_.data());
+                mat = cv::Mat{frame.height, frame.width, CV_8UC3, rgb_buffer_.data()};
+                encoding = sensor_msgs::image_encodings::RGB8;
+              }
+            }
           }
 
           // Display (comment out to avoid Qt threading issues)
@@ -154,7 +171,7 @@ namespace tello_driver
           // Synchronize ROS messages
           auto stamp = driver_->now();
 
-          if (driver_->count_subscribers(driver_->image_pub_->get_topic_name()) > 0)
+          if (!encoding.empty() && driver_->count_subscribers(driver_->image_pub_->get_topic_name()) > 0)
           {
             std_msgs::msg::Header header{};
             header.frame_id = downvision_active_ ? frame_id_down_ : frame_id_forward_;
