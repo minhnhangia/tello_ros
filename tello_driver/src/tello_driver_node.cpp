@@ -22,6 +22,7 @@ namespace tello_driver
   CXT_MACRO_MEMBER(camera_frame_id_forward, std::string, std::string("camera_frame")) /* Forward camera frame ID */ \
   CXT_MACRO_MEMBER(camera_frame_id_down, std::string, std::string("camera_down_frame")) /* Downward camera frame ID */ \
   CXT_MACRO_MEMBER(publish_down_as_mono, bool, false) \
+  CXT_MACRO_MEMBER(is_ext_tof_attached, bool, false) \
   /* End of list */
 
   struct TelloDriverContext
@@ -34,7 +35,7 @@ namespace tello_driver
   constexpr int32_t STATE_TIMEOUT = 4;      // We stopped receiving telemetry
   constexpr int32_t VIDEO_TIMEOUT = 4;      // We stopped receiving video
   constexpr int32_t KEEP_ALIVE = 12;        // We stopped receiving input from other ROS nodes
-  constexpr int32_t COMMAND_TIMEOUT = 7;    // Drone didn't respond to a command
+  constexpr int32_t COMMAND_TIMEOUT = 9;    // Drone didn't respond to a command
 
   TelloDriverNode::TelloDriverNode(const rclcpp::NodeOptions &options) :
     Node("tello_driver", options)
@@ -59,11 +60,6 @@ namespace tello_driver
     // ROS subscription
     cmd_vel_sub_ = create_subscription<geometry_msgs::msg::Twist>(
       "cmd_vel", 1, std::bind(&TelloDriverNode::cmd_vel_callback, this, std::placeholders::_1));
-
-    // ROS timers
-    using namespace std::chrono_literals;
-    spin_timer_ = create_wall_timer(1s, std::bind(&TelloDriverNode::timer_callback, this));
-    ext_tof_timer_ = create_wall_timer(200ms, std::bind(&TelloDriverNode::ext_tof_timer_callback, this));  // 5Hz
 
     // Parameters - Allocate the parameter context as a local variable because it is not used outside this routine
     TelloDriverContext cxt{};
@@ -94,6 +90,15 @@ namespace tello_driver
       cxt.camera_frame_id_forward_,
       cxt.camera_frame_id_down_,
       cxt.publish_down_as_mono_);
+
+    // ROS timers
+    using namespace std::chrono_literals;
+    spin_timer_ = create_wall_timer(1s, std::bind(&TelloDriverNode::timer_callback, this));
+    if (cxt.is_ext_tof_attached_)
+    {
+      RCLCPP_INFO(get_logger(), "EXT TOF sensor is attached");
+      ext_tof_timer_ = create_wall_timer(200ms, std::bind(&TelloDriverNode::ext_tof_timer_callback, this));  // 5Hz
+    }
   }
 
   TelloDriverNode::~TelloDriverNode()
@@ -204,7 +209,7 @@ namespace tello_driver
       return;
     }
 
-    if (!is_first_init_)
+    if (!is_first_init_ && state_socket_->receiving() && video_socket_->receiving())
     {
       RCLCPP_INFO(get_logger(), "Tello driver initialized!");
       is_first_init_ = true;
