@@ -80,7 +80,7 @@ namespace tello_driver
     RCLCPP_INFO(get_logger(), "Drone at %s:%d", cxt.drone_ip_.c_str(), cxt.drone_port_);
     RCLCPP_INFO(get_logger(), "Listening for command responses on localhost:%d", cxt.command_port_);
     RCLCPP_INFO(get_logger(), "Listening for data on localhost:%d", cxt.data_port_);
-    RCLCPP_INFO(get_logger(), "Listening for video on localhost:%d", cxt.video_port_);
+    RCLCPP_INFO(get_logger(), "Listening for video on %s", cxt.video_stream_url_.c_str());
 
     // Store frame IDs for odometry
     odom_frame_id_ = cxt.odom_frame_id_;
