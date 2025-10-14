@@ -1,61 +1,60 @@
-image_width: 960
-image_height: 720
-camera_name: tello_camera
-camera_matrix:
-  rows: 3
-  cols: 3
-  data: [921.170702, 0.000000, 459.904354, 0.000000, 919.018377, 351.238301, 0.000000, 0.000000, 1.000000]
-distortion_model: plumb_bob
-distortion_coefficients:
-  rows: 1
-  cols: 5
-  data: [-0.033458, 0.105152, 0.001256, -0.006647, 0.000000]
-rectification_matrix:
-  rows: 3
-  cols: 3
-  data: [1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000, 0.000000, 0.000000, 1.000000]
-projection_matrix:
-  rows: 3
-  cols: 4
-  data: [925.811035, 0.000000, 454.815025, 0.000000, 0.000000, 927.915833, 352.139027, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000]
-
-# # Tello camera calibration updated on 2025-10-02
 # image_width: 960
 # image_height: 720
 # camera_name: tello_camera
-
-# # K - Intrinsic Camera Matrix (3x3)
 # camera_matrix:
 #   rows: 3
 #   cols: 3
-#   data: [473.11891765, 0.0, 323.13378419,
-#          0.0, 475.40414375, 234.45123335,
-#          0.0, 0.0, 1.0]
-
-# # D - Distortion Coefficients (1x5)
-# # Using 'plumb_bob' model (k1, k2, t1, t2, k3)
+#   data: [921.170702, 0.000000, 459.904354, 0.000000, 919.018377, 351.238301, 0.000000, 0.000000, 1.000000]
 # distortion_model: plumb_bob
 # distortion_coefficients:
 #   rows: 1
 #   cols: 5
-#   data: [0.04172334, 0.38719427, -0.00921904, 0.00348033, -0.70063595]
-
-# # R - Rectification Matrix (3x3)
-# # For a monocular camera, this is always the identity matrix.
+#   data: [-0.033458, 0.105152, 0.001256, -0.006647, 0.000000]
 # rectification_matrix:
 #   rows: 3
 #   cols: 3
-#   data: [1.0, 0.0, 0.0,
-#          0.0, 1.0, 0.0,
-#          0.0, 0.0, 1.0]
-
-# # P - Projection/Camera Matrix (3x4)
-# # This matrix is used for rectified images. Since your Aruco node will
-# # perform the un-distortion itself, this matrix will be ignored.
-# # It is safe to leave the old values here.
+#   data: [1.000000, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000, 0.000000, 0.000000, 1.000000]
 # projection_matrix:
 #   rows: 3
 #   cols: 4
-#   data: [925.811035, 0.0, 454.815025, 0.0,
-#          0.0, 927.915833, 352.139027, 0.0,
-#          0.0, 0.0, 1.0, 0.0]
+#   data: [925.811035, 0.000000, 454.815025, 0.000000, 0.000000, 927.915833, 352.139027, 0.000000, 0.000000, 0.000000, 1.000000, 0.000000]
+
+image_width: 648
+image_height: 478
+camera_name: tello_camera
+
+# K - Intrinsic Camera Matrix (3x3)
+camera_matrix:
+  rows: 3
+  cols: 3
+  data: [464.49939199, 0.0, 355.65385496,
+         0.0, 463.74392077, 243.63197894,
+         0.0, 0.0, 1.0]
+
+# D - Distortion Coefficients (1x5)
+# Using 'plumb_bob' model (k1, k2, t1, t2, k3)
+distortion_model: plumb_bob
+distortion_coefficients:
+  rows: 1
+  cols: 5
+  data: [0.09045155, -0.60771235, -0.01292715, -0.01337179,  1.97011584]
+
+# R - Rectification Matrix (3x3)
+# For a monocular camera, this is always the identity matrix.
+rectification_matrix:
+  rows: 3
+  cols: 3
+  data: [1.0, 0.0, 0.0,
+         0.0, 1.0, 0.0,
+         0.0, 0.0, 1.0]
+
+# P - Projection/Camera Matrix (3x4)
+# This matrix is used for rectified images. Since your Aruco node will
+# perform the un-distortion itself, this matrix will be ignored.
+# It is safe to leave the old values here.
+projection_matrix:
+  rows: 3
+  cols: 4
+  data: [925.811035, 0.0, 454.815025, 0.0,
+         0.0, 927.915833, 352.139027, 0.0,
+         0.0, 0.0, 1.0, 0.0]
