@@ -107,7 +107,7 @@ namespace tello_driver
     if (cxt.is_ext_tof_attached_)
     {
       RCLCPP_INFO(get_logger(), "EXT TOF sensor is attached");
-      ext_tof_timer_ = create_wall_timer(200ms, std::bind(&TelloDriverNode::ext_tof_timer_callback, this));  // 5Hz
+      ext_tof_timer_ = create_wall_timer(250ms, std::bind(&TelloDriverNode::ext_tof_timer_callback, this));  // 5Hz
     }
   }
 
