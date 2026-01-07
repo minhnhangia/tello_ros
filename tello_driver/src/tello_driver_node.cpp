@@ -255,9 +255,9 @@ namespace tello_driver
     if (command_socket_->waiting_ext_tof() && 
         now() - command_socket_->ext_tof_send_time() > rclcpp::Duration(1, 0))
     {
-      // RCLCPP_WARN(get_logger(), "EXT TOF query timed out");
-      // Reset the EXT TOF waiting state
-      command_socket_->timeout();
+      // Use dedicated method that only resets EXT TOF state without
+      // corrupting the main command socket state (receiving_, waiting_)
+      command_socket_->timeout_ext_tof();
       return;
     }
 

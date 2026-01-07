@@ -50,6 +50,18 @@ namespace tello_driver
     return waiting_ext_tof_;
   }
 
+  void CommandSocket::timeout_ext_tof()
+  {
+    std::lock_guard<std::mutex> lock(mtx_);
+    // Only reset EXT TOF state - don't touch receiving_ or waiting_
+    // This prevents corrupting the main command state when a non-critical
+    // EXT TOF query times out
+    if (waiting_ext_tof_) {
+      RCLCPP_DEBUG(driver_->get_logger(), "EXT TOF query timed out");
+      waiting_ext_tof_ = false;
+    }
+  }
+
   rclcpp::Time CommandSocket::ext_tof_send_time()
   {
     std::lock_guard<std::mutex> lock(mtx_);
