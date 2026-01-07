@@ -3,11 +3,8 @@
 #include "rclcpp/rclcpp.hpp"
 #include "cv_bridge/cv_bridge.hpp"
 #include "geometry_msgs/msg/twist.hpp"
-#include "nav_msgs/msg/odometry.hpp"
 #include "sensor_msgs/msg/camera_info.hpp"
 #include "sensor_msgs/msg/range.hpp"
-#include "tf2/LinearMath/Quaternion.h"
-#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 #include "tello_msgs/msg/flight_data.hpp"
 #include "tello_msgs/msg/tello_response.hpp"
 #include "tello_msgs/srv/tello_action.hpp"
@@ -54,20 +51,12 @@ namespace tello_driver
     rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr camera_info_pub_;
     rclcpp::Publisher<tello_msgs::msg::FlightData>::SharedPtr flight_data_pub_;
     rclcpp::Publisher<tello_msgs::msg::TelloResponse>::SharedPtr tello_response_pub_;
-    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_;
     rclcpp::Publisher<sensor_msgs::msg::Range>::SharedPtr ext_tof_pub_;
-
-    // Odometry helper method
-    void publish_odometry(const tello_msgs::msg::FlightData& flight_data);
 
   // Switch active camera (false = forward camera, true = downward camera)
   void set_downvision_active(bool active);
 
   private:
-    // Frame IDs for odometry
-    std::string odom_frame_id_;
-    std::string base_frame_id_;
-
     bool is_first_init_ = false;
 
     // Video config parameters (applied before stream starts)

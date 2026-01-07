@@ -29,8 +29,7 @@ namespace tello_driver
     receive_time_ = driver_->now();
 
     if (receiving_ && 
-        driver_->count_subscribers(driver_->flight_data_pub_->get_topic_name()) == 0 && 
-        driver_->count_subscribers(driver_->odom_pub_->get_topic_name()) == 0)
+        driver_->count_subscribers(driver_->flight_data_pub_->get_topic_name()) == 0)
     {
       // Nothing to do
       return;
@@ -59,8 +58,7 @@ namespace tello_driver
     }
 
     // Only send ROS messages if there are subscribers
-    if (driver_->count_subscribers(driver_->flight_data_pub_->get_topic_name()) == 0 && 
-        driver_->count_subscribers(driver_->odom_pub_->get_topic_name()) == 0)
+    if (driver_->count_subscribers(driver_->flight_data_pub_->get_topic_name()) == 0)
     {
       return;
     }
@@ -104,11 +102,7 @@ namespace tello_driver
       return;
     }
 
-    driver_->flight_data_pub_->publish(msg);
-    
-    // Also publish odometry data
-    driver_->publish_odometry(msg);
-    
+    driver_->flight_data_pub_->publish(msg); 
   }
 
 } // namespace tello_driver
