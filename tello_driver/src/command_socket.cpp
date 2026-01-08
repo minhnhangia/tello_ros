@@ -23,6 +23,7 @@ namespace tello_driver
     receiving_ = false;
 
     if (waiting_) {
+      last_result_ = CommandResult::TIMEOUT;
       complete_command(tello_msgs::msg::TelloResponse::TIMEOUT, "error: command timed out");
     }
     
@@ -68,11 +69,26 @@ namespace tello_driver
     return ext_tof_send_time_;
   }
 
+  CommandResult CommandSocket::get_last_result()
+  {
+    std::lock_guard<std::mutex> lock(mtx_);
+    return last_result_;
+  }
+
+  void CommandSocket::clear_last_result()
+  {
+    std::lock_guard<std::mutex> lock(mtx_);
+    last_result_ = CommandResult::NONE;
+  }
+
   void CommandSocket::initiate_command(std::string command, bool respond)
   {
     std::lock_guard<std::mutex> lock(mtx_);
 
     if (waiting_) return;
+    
+    // Clear previous result before sending new command
+    last_result_ = CommandResult::NONE;
     
     RCLCPP_DEBUG(driver_->get_logger(), "Sending '%s'...", command.c_str());
 
@@ -201,6 +217,10 @@ namespace tello_driver
     {
       RCLCPP_DEBUG(driver_->get_logger(), "Received '%s'", str.c_str());
       const bool ok = (str != "error");
+      
+      // Track result for response-gated state machines
+      last_result_ = ok ? CommandResult::OK : CommandResult::ERROR;
+      
       complete_command(ok ? tello_msgs::msg::TelloResponse::OK : tello_msgs::msg::TelloResponse::ERROR,
                        str);
 

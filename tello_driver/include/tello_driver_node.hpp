@@ -66,19 +66,32 @@ namespace tello_driver
     std::string video_resolution_ = "";  // empty => skip
     int video_bitrate_ = -1;              // -1 => skip
 
+    // Video configuration state machine with response verification
     enum class VideoConfigState {
-      SetResolution = 0,
-      SetFps,
-      SetBitrate,
-      StreamOn,
-      Done
+      SetResolution = 0,  // Send setresolution command
+      WaitResolution,     // Wait for setresolution response
+      SetFps,             // Send setfps command  
+      WaitFps,            // Wait for setfps response
+      SetBitrate,         // Send setbitrate command
+      WaitBitrate,        // Wait for setbitrate response
+      StreamOn,           // Send streamon command
+      WaitStreamOn,       // Wait for streamon response
+      Done                // Video configuration complete
     };
     VideoConfigState video_config_state_ = VideoConfigState::SetResolution;
+
+    // Retry tracking for video configuration commands
+    static constexpr int MAX_VIDEO_CONFIG_RETRIES = 4;
+    int video_config_retry_count_ = 0;
 
   private:
 
     void timer_callback();
     void ext_tof_timer_callback();  // Dedicated EXT TOF timer callback
+    
+    // Video configuration state machine (called from timer_callback during startup)
+    // Returns true if video config is in progress and timer should return early
+    bool process_video_config();
 
     void command_callback(
       const std::shared_ptr<rmw_request_id_t> request_header,
@@ -138,6 +151,17 @@ namespace tello_driver
   };
 
   //=====================================================================================
+  // Command result tracking
+  //=====================================================================================
+
+  enum class CommandResult {
+    NONE,     // No command sent yet or result consumed
+    OK,       // Command succeeded ("ok" response)
+    ERROR,    // Command failed ("error" response)
+    TIMEOUT   // Command timed out
+  };
+
+  //=====================================================================================
   // Command socket
   //=====================================================================================
 
@@ -156,7 +180,14 @@ namespace tello_driver
 
     void initiate_command(std::string command, bool respond);
 
+    // Command result tracking for response-gated state machines
+    CommandResult get_last_result();
+    void clear_last_result();
+
     void query_ext_tof();
+
+    // Reset EXT TOF waiting state without affecting main command state
+    void timeout_ext_tof();
 
     bool waiting_ext_tof();
 
@@ -180,6 +211,9 @@ namespace tello_driver
 
     // Track last command to enable state updates on OK responses
     std::string last_command_;
+
+    // Result of the last completed command (for response-gated state machines)
+    CommandResult last_result_ = CommandResult::NONE;
   };
 
   //=====================================================================================

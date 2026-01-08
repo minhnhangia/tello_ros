@@ -114,7 +114,7 @@ namespace tello_driver
     std::shared_ptr<tello_msgs::srv::TelloAction::Response> response)
   {
     (void) request_header;
-    if (!state_socket_->receiving() || !video_socket_->receiving()) {
+    if (!state_socket_->receiving()) {
       RCLCPP_WARN(get_logger(), "Not connected, dropping '%s'", request->cmd.c_str());
       response->rc = response->ERROR_NOT_CONNECTED;
     } else if (command_socket_->waiting()) {
@@ -147,6 +147,140 @@ namespace tello_driver
     }
   }
 
+  bool TelloDriverNode::process_video_config()
+  {
+    // Only process if conditions are met: receiving state, no video yet, not waiting for command
+    if (!state_socket_->receiving() || video_socket_->receiving() || command_socket_->waiting()) {
+      return false;
+    }
+
+    // Already complete
+    if (video_config_state_ == VideoConfigState::Done) {
+      return false;
+    }
+
+    CommandResult result = command_socket_->get_last_result();
+
+    switch (video_config_state_) {
+      case VideoConfigState::SetResolution:
+        video_config_retry_count_ = 0;
+        command_socket_->clear_last_result();
+        if (!video_resolution_.empty()) {
+          std::string cmd = std::string("setresolution ") + video_resolution_;
+          RCLCPP_INFO(get_logger(), "Configuring video resolution: %s", cmd.c_str());
+          command_socket_->initiate_command(cmd, false);
+          video_config_state_ = VideoConfigState::WaitResolution;
+        } else {
+          video_config_state_ = VideoConfigState::SetFps;
+        }
+        return true;
+
+      case VideoConfigState::WaitResolution:
+        if (result == CommandResult::OK) {
+          RCLCPP_INFO(get_logger(), "Video resolution configured successfully");
+          video_config_retry_count_ = 0;
+          command_socket_->clear_last_result();
+          video_config_state_ = VideoConfigState::SetFps;
+        } else if (result == CommandResult::ERROR || result == CommandResult::TIMEOUT) {
+          video_config_retry_count_++;
+          if (video_config_retry_count_ < MAX_VIDEO_CONFIG_RETRIES) {
+            RCLCPP_WARN(get_logger(), "setresolution failed (attempt %d/%d), retrying...",
+                        video_config_retry_count_, MAX_VIDEO_CONFIG_RETRIES);
+            command_socket_->clear_last_result();
+            video_config_state_ = VideoConfigState::SetResolution;
+          } else {
+            RCLCPP_ERROR(get_logger(), "setresolution failed after %d attempts, continuing anyway",
+                         MAX_VIDEO_CONFIG_RETRIES);
+            video_config_retry_count_ = 0;
+            command_socket_->clear_last_result();
+            video_config_state_ = VideoConfigState::SetFps;
+          }
+        }
+        return true;
+
+      case VideoConfigState::SetFps:
+        command_socket_->clear_last_result();
+        if (!video_fps_.empty()) {
+          std::string cmd = std::string("setfps ") + video_fps_;
+          RCLCPP_INFO(get_logger(), "Configuring video FPS: %s", cmd.c_str());
+          command_socket_->initiate_command(cmd, false);
+          video_config_state_ = VideoConfigState::WaitFps;
+        } else {
+          video_config_state_ = VideoConfigState::SetBitrate;
+        }
+        return true;
+
+      case VideoConfigState::WaitFps:
+        if (result == CommandResult::OK) {
+          RCLCPP_DEBUG(get_logger(), "Video FPS configured successfully");
+          command_socket_->clear_last_result();
+          video_config_state_ = VideoConfigState::SetBitrate;
+        } else if (result == CommandResult::ERROR || result == CommandResult::TIMEOUT) {
+          RCLCPP_WARN(get_logger(), "setfps failed, continuing with default FPS");
+          command_socket_->clear_last_result();
+          video_config_state_ = VideoConfigState::SetBitrate;
+        }
+        return true;
+
+      case VideoConfigState::SetBitrate:
+        command_socket_->clear_last_result();
+        if (video_bitrate_ >= 0) {
+          int lvl = std::max(0, std::min(5, video_bitrate_));
+          std::string cmd = std::string("setbitrate ") + std::to_string(lvl);
+          RCLCPP_INFO(get_logger(), "Configuring video bitrate: %s", cmd.c_str());
+          command_socket_->initiate_command(cmd, false);
+          video_config_state_ = VideoConfigState::WaitBitrate;
+        } else {
+          video_config_state_ = VideoConfigState::StreamOn;
+        }
+        return true;
+
+      case VideoConfigState::WaitBitrate:
+        if (result == CommandResult::OK) {
+          RCLCPP_DEBUG(get_logger(), "Video bitrate configured successfully");
+          command_socket_->clear_last_result();
+          video_config_state_ = VideoConfigState::StreamOn;
+        } else if (result == CommandResult::ERROR || result == CommandResult::TIMEOUT) {
+          RCLCPP_WARN(get_logger(), "setbitrate failed, continuing with default bitrate");
+          command_socket_->clear_last_result();
+          video_config_state_ = VideoConfigState::StreamOn;
+        }
+        return true;
+
+      case VideoConfigState::StreamOn:
+        command_socket_->clear_last_result();
+        RCLCPP_INFO(get_logger(), "Starting video stream (streamon)");
+        command_socket_->initiate_command("streamon", false);
+        video_config_state_ = VideoConfigState::WaitStreamOn;
+        return true;
+
+      case VideoConfigState::WaitStreamOn:
+        if (result == CommandResult::OK) {
+          RCLCPP_INFO(get_logger(), "Video stream started successfully");
+          command_socket_->clear_last_result();
+          video_config_state_ = VideoConfigState::Done;
+        } else if (result == CommandResult::ERROR || result == CommandResult::TIMEOUT) {
+          video_config_retry_count_++;
+          if (video_config_retry_count_ < MAX_VIDEO_CONFIG_RETRIES) {
+            RCLCPP_WARN(get_logger(), "streamon failed (attempt %d/%d), retrying...",
+                        video_config_retry_count_, MAX_VIDEO_CONFIG_RETRIES);
+            command_socket_->clear_last_result();
+            video_config_state_ = VideoConfigState::StreamOn;
+          } else {
+            RCLCPP_ERROR(get_logger(), "streamon failed after %d attempts", MAX_VIDEO_CONFIG_RETRIES);
+            command_socket_->clear_last_result();
+            video_config_state_ = VideoConfigState::Done;
+          }
+        }
+        return true;
+
+      case VideoConfigState::Done:
+        break;
+    }
+
+    return false;
+  }
+
   // Do work every 1s
   void TelloDriverNode::timer_callback()
   {
@@ -160,43 +294,9 @@ namespace tello_driver
       return;
     }
 
-    if (state_socket_->receiving() && !video_socket_->receiving() && !command_socket_->waiting()) {
-      // Before starting the video stream, configure resolution/fps/bitrate as requested.
-      switch (video_config_state_) {
-        case VideoConfigState::SetResolution:
-          if (!video_resolution_.empty()) {
-            std::string cmd = std::string("setresolution ") + video_resolution_;
-            RCLCPP_INFO(get_logger(), "Configuring video resolution: %s", cmd.c_str());
-            command_socket_->initiate_command(cmd, false);
-          }
-          video_config_state_ = VideoConfigState::SetFps;
-          return;
-        case VideoConfigState::SetFps:
-          if (!video_fps_.empty()) {
-            std::string cmd = std::string("setfps ") + video_fps_;
-            RCLCPP_INFO(get_logger(), "Configuring video FPS: %s", cmd.c_str());
-            command_socket_->initiate_command(cmd, false);
-          }
-          video_config_state_ = VideoConfigState::SetBitrate;
-          return;
-        case VideoConfigState::SetBitrate:
-          if (video_bitrate_ >= 0) {
-            // Tello SDK uses levels 0..5 (0=auto). We'll clamp and send.
-            int lvl = std::max(0, std::min(5, video_bitrate_));
-            std::string cmd = std::string("setbitrate ") + std::to_string(lvl);
-            RCLCPP_INFO(get_logger(), "Configuring video bitrate: %s", cmd.c_str());
-            command_socket_->initiate_command(cmd, false);
-          }
-          video_config_state_ = VideoConfigState::StreamOn;
-          return;
-        case VideoConfigState::StreamOn:
-          RCLCPP_INFO(get_logger(), "Starting video stream (streamon)");
-          command_socket_->initiate_command("streamon", false);
-          video_config_state_ = VideoConfigState::Done;
-          return;
-        case VideoConfigState::Done:
-          break;
-      }
+    // Process video configuration state machine
+    if (process_video_config()) {
+      return;
     }
 
     //====
