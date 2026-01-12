@@ -39,6 +39,13 @@ namespace tello_driver
     return waiting_;
   }
 
+  bool CommandSocket::is_busy()
+  {
+    std::lock_guard<std::mutex> lock(mtx_);
+    // Drone can only handle one command at a time - check both regular and EXT TOF
+    return waiting_ || waiting_ext_tof_;
+  }
+
   rclcpp::Time CommandSocket::send_time()
   {
     std::lock_guard<std::mutex> lock(mtx_);
@@ -85,7 +92,12 @@ namespace tello_driver
   {
     std::lock_guard<std::mutex> lock(mtx_);
 
-    if (waiting_) return;
+    // Cannot send if ANY command is in progress (regular or EXT TOF)
+    if (waiting_ || waiting_ext_tof_) 
+    {
+        RCLCPP_DEBUG(driver_->get_logger(), "Busy, cannot send '%s'", command.c_str());
+        return;
+    };
     
     // Clear previous result before sending new command
     last_result_ = CommandResult::NONE;

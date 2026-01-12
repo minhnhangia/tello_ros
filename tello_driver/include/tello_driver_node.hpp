@@ -176,6 +176,10 @@ namespace tello_driver
 
     bool waiting();
 
+    // Returns true if the drone is busy with any command (regular or EXT TOF)
+    // Use this to check before sending commands to avoid race conditions
+    bool is_busy();
+
     rclcpp::Time send_time();
 
     void initiate_command(std::string command, bool respond);

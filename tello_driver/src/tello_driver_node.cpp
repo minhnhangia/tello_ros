@@ -100,7 +100,7 @@ namespace tello_driver
     if (cxt.is_ext_tof_attached_)
     {
       RCLCPP_INFO(get_logger(), "EXT TOF sensor is attached");
-      ext_tof_timer_ = create_wall_timer(250ms, std::bind(&TelloDriverNode::ext_tof_timer_callback, this));  // 5Hz
+      ext_tof_timer_ = create_wall_timer(263ms, std::bind(&TelloDriverNode::ext_tof_timer_callback, this));  // 5Hz
     }
   }
 
@@ -117,7 +117,7 @@ namespace tello_driver
     if (!state_socket_->receiving()) {
       RCLCPP_WARN(get_logger(), "Not connected, dropping '%s'", request->cmd.c_str());
       response->rc = response->ERROR_NOT_CONNECTED;
-    } else if (command_socket_->waiting()) {
+    } else if (command_socket_->is_busy()) {
       RCLCPP_WARN(get_logger(), "Busy, dropping '%s'", request->cmd.c_str());
       response->rc = response->ERROR_BUSY;
     } else {
@@ -351,9 +351,11 @@ namespace tello_driver
       return;
     }
 
-    // Check for EXT TOF timeout (1 second timeout for non-critical queries)
+    // Check for EXT TOF timeout (0.25 second timeout for non-critical queries)
+    constexpr double EXT_TOF_TIMEOUT_SEC = 0.25;
+
     if (command_socket_->waiting_ext_tof() && 
-        now() - command_socket_->ext_tof_send_time() > rclcpp::Duration(1, 0))
+        (now() - command_socket_->ext_tof_send_time()) > rclcpp::Duration::from_seconds(EXT_TOF_TIMEOUT_SEC))
     {
       // Use dedicated method that only resets EXT TOF state without
       // corrupting the main command socket state (receiving_, waiting_)
